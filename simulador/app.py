@@ -8,16 +8,14 @@ Ejecutar con:
 
 import streamlit as st
 import matplotlib.pyplot as plt
-
-from physics import calcular_fuerzas, barrer_angulos
-from ui      import (
-    inyectar_estilos,
-    renderizar_sidebar,
-    renderizar_resultados,
-    construir_diagrama,
-    construir_graficas_sensibilidad,
-)
-from utils import validar_entradas
+import physics.forces as phy
+import physics.sensitivity as se
+import ui.styles as stl
+import ui.sidebar as sid
+import ui.results as re
+import ui.diagram as dia
+import ui.charts as ch
+import utils.validation as va
 
 
 # ── Configuración de página ──────────────────────────────────────────────────
@@ -29,7 +27,7 @@ st.set_page_config(
 )
 
 # ── Estilos globales ─────────────────────────────────────────────────────────
-inyectar_estilos()
+stl.inyectar_estilos()
 
 # ── Hero header ──────────────────────────────────────────────────────────────
 st.markdown("""
@@ -40,7 +38,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Parámetros desde el sidebar ──────────────────────────────────────────────
-params = renderizar_sidebar()
+params = sid.renderizar_sidebar()
 m1              = params["m1"]
 m2              = params["m2"]
 theta_deg       = params["theta_deg"]
@@ -49,7 +47,7 @@ mu              = params["mu"]
 friccion_activa = params["friccion_activa"]
 
 # ── Validación de entradas ───────────────────────────────────────────────────
-errores = validar_entradas(m1, m2, theta_deg, g, mu)
+errores = va.validar_entradas(m1, m2, theta_deg, g, mu)
 if errores:
     for err in errores:
         st.markdown(f'<div class="err-banner">{err}</div>',
@@ -57,7 +55,7 @@ if errores:
     st.stop()
 
 # ── Cálculos físicos ─────────────────────────────────────────────────────────
-resultado = calcular_fuerzas(m1, m2, theta_deg, g, mu, friccion_activa)
+resultado = phy.calcular_fuerzas(m1, m2, theta_deg, g, mu, friccion_activa)
 
 # ── Layout principal: diagrama + resultados ───────────────────────────────────
 col_viz, col_res = st.columns([1.35, 1], gap="large")
@@ -65,12 +63,12 @@ col_viz, col_res = st.columns([1.35, 1], gap="large")
 with col_viz:
     st.markdown('<div class="card-title">📐 Diagrama del Sistema</div>',
                 unsafe_allow_html=True)
-    fig_diag = construir_diagrama(m1, m2, theta_deg, resultado)
+    fig_diag = dia.construir_diagrama(m1, m2, theta_deg, resultado)
     st.pyplot(fig_diag, use_container_width=True)
     plt.close(fig_diag)
 
 with col_res:
-    renderizar_resultados(resultado, m1, m2, mu)
+    re.renderizar_resultados(resultado, m1, m2, mu)
 
 # ── Análisis de sensibilidad ─────────────────────────────────────────────────
 st.markdown("<br>", unsafe_allow_html=True)
@@ -79,9 +77,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-datos_sens = barrer_angulos(m1, m2, g, mu, friccion_activa)
+datos_sens = se.barrer_angulos(m1, m2, g, mu, friccion_activa)
 
-fig_charts = construir_graficas_sensibilidad(
+fig_charts = ch.construir_graficas_sensibilidad(
     angulos        = datos_sens["angulos"],
     aceleraciones  = datos_sens["aceleraciones"],
     tensiones      = datos_sens["tensiones"],
