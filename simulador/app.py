@@ -70,25 +70,7 @@ with col_viz:
 with col_res:
     re.renderizar_resultados(resultado, m1, m2, mu)
 
-# ── Análisis de sensibilidad ─────────────────────────────────────────────────
-st.markdown("<br>", unsafe_allow_html=True)
-st.markdown(
-    '<div class="card-title">🔬 Análisis de Sensibilidad — Variación de Ángulo</div>',
-    unsafe_allow_html=True,
-)
-
 datos_sens = se.barrer_angulos(m1, m2, g, mu, friccion_activa)
-
-fig_charts = ch.construir_graficas_sensibilidad(
-    angulos        = datos_sens["angulos"],
-    aceleraciones  = datos_sens["aceleraciones"],
-    tensiones      = datos_sens["tensiones"],
-    theta_actual   = theta_deg,
-    acc_actual     = abs(resultado.aceleracion),
-    tension_actual = resultado.tension,
-)
-st.pyplot(fig_charts, use_container_width=True)
-plt.close(fig_charts)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("""
