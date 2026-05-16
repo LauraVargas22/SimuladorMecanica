@@ -50,26 +50,35 @@ def _normalizar_longitud(valor: float, referencia: float) -> float:
     raw = (valor / referencia) * _VECTOR_MAX_LEN
     return max(raw, _VECTOR_MIN_LEN if valor > 0 else 0.0)
 
+def _vector(
+    ax,
+    ox: float,
+    oy: float,
+    dx: float,
+    dy: float,
+    color: str,
+    label: str = "",
+    valor: float | None = None,
+    lw: float = 3.0,
+    zorder: int = 10,
+) -> None:
 
-def _vector(ax, ox: float, oy: float, dx: float, dy: float,
-            color: str, label: str = "", valor: float | None = None,
-            lw: float = 2.0, offset_label: tuple = (0.08, 0.08),
-            zorder: int = 10) -> None:
-    """
-    Dibuja un vector (flecha) con etiqueta de nombre y valor numérico.
+    # Glow
+    ax.annotate(
+        "",
+        xy=(ox + dx, oy + dy),
+        xytext=(ox, oy),
+        arrowprops=dict(
+            arrowstyle="-|>",
+            color=color,
+            lw=lw + 5,
+            alpha=0.18,
+            mutation_scale=28,
+        ),
+        zorder=zorder - 1,
+    )
 
-    Parámetros
-    ----------
-    ox, oy       : origen del vector
-    dx, dy       : desplazamiento (ya escalado)
-    color        : color de la flecha y etiqueta
-    label        : nombre del vector (p.ej. "N")
-    valor        : magnitud física en N para mostrar entre paréntesis
-    lw           : ancho de línea
-    offset_label : desplazamiento (x, y) de la etiqueta respecto al extremo
-    zorder       : orden de dibujado
-    """
-    # Dibuja la flecha principal
+    # Vector principal
     ax.annotate(
         "",
         xy=(ox + dx, oy + dy),
@@ -78,27 +87,12 @@ def _vector(ax, ox: float, oy: float, dx: float, dy: float,
             arrowstyle="-|>",
             color=color,
             lw=lw,
-            mutation_scale=16,
+            mutation_scale=22,
             shrinkA=0,
             shrinkB=0,
         ),
         zorder=zorder,
     )
-
-    # Etiqueta con nombre y valor numérico
-    if label:
-        lx = ox + dx + offset_label[0]
-        ly = oy + dy + offset_label[1]
-        texto = f"{label}" if valor is None else f"{label}\n{valor:.1f} N"
-        ax.text(
-            lx, ly, texto,
-            color=color, fontsize=7.2, fontfamily="monospace",
-            fontweight="bold", ha="left", va="center",
-            zorder=zorder + 1,
-            path_effects=[
-                pe.withStroke(linewidth=2.5, foreground=COLORS["bg_deep"])
-            ],
-        )
 
 
 def _flecha_desplazamiento(ax, ox: float, oy: float,
@@ -152,7 +146,7 @@ def _dibujar_plano(ax, theta: float, base_x: float,
     ax.fill(
         [base_x, top_x, top_x, base_x],
         [base_y, top_y, base_y, base_y],
-        color=COLORS["plano"], zorder=1, alpha=0.9,
+        color=COLORS["plano"], zorder=1, alpha=1.0,
     )
     # Superficie del plano
     ax.plot([base_x, top_x], [base_y, top_y],
@@ -199,16 +193,26 @@ def _dibujar_bloque1(ax, theta: float, base_x: float, base_y: float,
 
     # Sombra interior
     ax.add_patch(plt.Polygon(
-        corners_world + 0.04, closed=True,
-        facecolor="#0d1424", edgecolor="none",
-        zorder=4, alpha=0.6,
+        corners_world,
+        closed=True,
+        facecolor=COLORS["bloque"],
+        edgecolor=COLORS["bloque_borde"],
+        linewidth=2.8,
+        zorder=5,
+        path_effects=[
+            pe.withStroke(
+                linewidth=8,
+                foreground="#7c3aed33"
+            )
+        ]
     ))
+
     # Bloque
     ax.add_patch(plt.Polygon(
         corners_world, closed=True,
         facecolor=COLORS["bloque"],
         edgecolor=COLORS["bloque_borde"],
-        linewidth=2.0, zorder=5,
+        linewidth=2.8, zorder=5,
     ))
 
     # Etiqueta de masa dentro del bloque
@@ -263,7 +267,7 @@ def _dibujar_bloque2(ax, px: float, py: float,
         boxstyle="round,pad=0.05",
         facecolor=COLORS["bloque"],
         edgecolor=COLORS["bloque_borde"],
-        linewidth=2.0, zorder=5,
+        linewidth=2.8, zorder=5,
     ))
     ax.text(b2x + bl_size / 2, b2y + bl_size / 2,
             f"m₂\n{m2} kg",
@@ -289,97 +293,195 @@ def _dibujar_cuerda(ax, theta: float, cx1: float, cy1: float, R,
 
 
 def _dibujar_vectores_fuerzas(ax, cx1: float, cy1: float, R,
-                               bl_size: float, theta: float,
-                               b2x: float, b2y: float,
-                               res: SystemResult) -> None:
+                              bl_size: float, theta: float,
+                              b2x: float, b2y: float,
+                              res: SystemResult) -> None:
     """
     Dibuja todos los vectores de fuerza con longitud proporcional
     a su magnitud física y etiqueta con el valor en N.
-
-    Vectores sobre m1: peso (vertical), normal (⊥ al plano),
-                       fricción (paralela al plano), tensión (↑ cuerda).
-    Vectores sobre m2: peso (↓), tensión (↑).
     """
-    # ── Referencia de escala: el mayor valor de fuerza del sistema ────────────
-    fuerzas_ref = max(res.F_paralela, res.F_normal, res.P2,
-                      res.tension, 1.0)
+
+    # Referencia de escala
+    fuerzas_ref = max(
+        res.F_paralela,
+        res.F_normal,
+        res.P2,
+        res.tension,
+        1.0
+    )
 
     def lon(f: float) -> float:
         return _normalizar_longitud(f, fuerzas_ref)
 
-    # ── Centro geométrico del bloque 1 ────────────────────────────────────────
+    # Centro geométrico del bloque 1
     centro1_local = np.array([0, bl_size / 2])
     centro1 = (R @ centro1_local) + np.array([cx1, cy1])
 
     # Vectores unitarios
-    dir_paralela  = np.array([ np.cos(theta),  np.sin(theta)])   # cuesta arriba
-    dir_normal    = np.array([-np.sin(theta),  np.cos(theta)])   # ⊥ al plano
-    dir_vertical  = np.array([0, -1])                            # hacia abajo
+    dir_paralela = np.array([np.cos(theta), np.sin(theta)])
+    dir_normal = np.array([-np.sin(theta), np.cos(theta)])
+    dir_vertical = np.array([0, -1])
 
-    # ── PESO de m1 (vertical ↓) ───────────────────────────────────────────────
-    L_peso1 = lon(res.F_paralela)   # usamos F_paralela como proxy visual del peso m1g
-    _vector(ax,
-            centro1[0], centro1[1],
-            dir_vertical[0] * L_peso1, dir_vertical[1] * L_peso1,
-            color=COLORS["peso"],
-            label="m₁g", valor=res.F_paralela / np.sin(theta) if np.sin(theta) > 0.01 else res.P2,
-            lw=2.0, offset_label=(-0.55, -0.1), zorder=10)
+    # Control de offsets para etiquetas
+    origen_counts = {}
 
-    # ── NORMAL a m1 (⊥ al plano ↑) ───────────────────────────────────────────
+    # def _compute_offset_label(ox, oy, dx, dy, base=(0.06, 0.06)):
+    #     key = (round(float(ox), 3), round(float(oy), 3))
+
+    #     idx = origen_counts.get(key, 0)
+    #     origen_counts[key] = idx + 1
+
+    #     perp = np.array([-dy, dx])
+    #     norm = np.hypot(perp[0], perp[1])
+
+    #     if norm < 1e-6:
+    #         perp_unit = np.array([0.0, 0.0])
+    #     else:
+    #         perp_unit = perp / norm
+
+    #     extra = perp_unit * (0.10 * idx)
+
+    #     return (
+    #         base[0] + extra[0],
+    #         base[1] + extra[1]
+    #     )
+
+    # ── PESO de m1 ─────────────────────────────
+    L_peso1 = lon(res.F_paralela)
+
+    # off = _compute_offset_label(
+    #     centro1[0],
+    #     centro1[1],
+    #     dir_vertical[0] * L_peso1,
+    #     dir_vertical[1] * L_peso1
+    # )
+
+    peso_m1 = (
+        res.F_paralela / np.sin(theta)
+        if np.sin(theta) > 0.01
+        else res.P2
+    )
+
+    _vector(
+        ax,
+        centro1[0],
+        centro1[1],
+        dir_vertical[0] * L_peso1,
+        dir_vertical[1] * L_peso1,
+        color=COLORS["peso"],
+        label="m₁g",
+        valor=peso_m1,
+        lw=2.0,
+        zorder=10
+    )
+
+    # ── NORMAL ─────────────────────────────
     L_normal = lon(res.F_normal)
-    _vector(ax,
-            centro1[0], centro1[1],
-            dir_normal[0] * L_normal, dir_normal[1] * L_normal,
-            color=COLORS["normal"],
-            label="N", valor=res.F_normal,
-            lw=2.0, offset_label=(0.06, 0.06), zorder=10)
 
-    # ── FRICCIÓN sobre m1 (paralela al plano, opuesta al movimiento) ──────────
+    # off = _compute_offset_label(
+    #     centro1[0],
+    #     centro1[1],
+    #     dir_normal[0] * L_normal,
+    #     dir_normal[1] * L_normal
+    # )
+
+    _vector(
+        ax,
+        centro1[0],
+        centro1[1],
+        dir_normal[0] * L_normal,
+        dir_normal[1] * L_normal,
+        color=COLORS["normal"],
+        label="N",
+        valor=res.F_normal,
+        lw=2.0,
+        zorder=10
+    )
+
+    # ── FRICCIÓN ─────────────────────────────
     if res.F_friccion > 0.01:
-        # Dirección según el estado del sistema
+
         if res.estado == "m2_baja":
-            dir_fric = -dir_paralela   # m1 sube → fricción apunta cuesta abajo
+            dir_fric = -dir_paralela
         else:
-            dir_fric =  dir_paralela   # m1 baja → fricción apunta cuesta arriba
+            dir_fric = dir_paralela
 
         L_fric = lon(res.F_friccion)
-        origen_fric = (R @ np.array([0, 0])) + np.array([cx1, cy1])
-        _vector(ax,
-                origen_fric[0], origen_fric[1],
-                dir_fric[0] * L_fric, dir_fric[1] * L_fric,
-                color=COLORS["friccion"],
-                label="Ff", valor=res.F_friccion,
-                lw=2.0, offset_label=(0.06, -0.18), zorder=10)
 
-    # ── TENSIÓN sobre m1 (hacia la polea, cuesta arriba) ─────────────────────
-    top_b1 = (R @ np.array([0, bl_size])) + np.array([cx1, cy1])
+        origen_fric = (
+            (R @ np.array([0, 0]))
+            + np.array([cx1, cy1])
+        )
+
+        _vector(
+            ax,
+            origen_fric[0],
+            origen_fric[1],
+            dir_fric[0] * L_fric,
+            dir_fric[1] * L_fric,
+            color=COLORS["friccion"],
+            label="Ff",
+            valor=res.F_friccion,
+            lw=2.0,
+            zorder=10
+        )
+
+    # ── TENSIÓN sobre m1 ─────────────────────────────
+    top_b1 = (
+        (R @ np.array([0, bl_size]))
+        + np.array([cx1, cy1])
+    )
+
     L_t1 = lon(res.tension)
-    _vector(ax,
-            top_b1[0], top_b1[1],
-            dir_paralela[0] * L_t1, dir_paralela[1] * L_t1,
-            color=COLORS["tension"],
-            label="T", valor=res.tension,
-            lw=2.0, offset_label=(0.06, 0.06), zorder=10)
 
-    # ── PESO de m2 (↓) ────────────────────────────────────────────────────────
+    _vector(
+        ax,
+        top_b1[0],
+        top_b1[1],
+        dir_paralela[0] * L_t1,
+        dir_paralela[1] * L_t1,
+        color=COLORS["tension"],
+        label="T",
+        valor=res.tension,
+        lw=2.0,
+        zorder=10
+    )
+
+    # ── PESO de m2 ─────────────────────────────
     cx2 = b2x + 0.275
-    cy2_top = b2y + 0.55
-    L_peso2 = lon(res.P2)
-    _vector(ax,
-            cx2, b2y,
-            0, -L_peso2,
-            color=COLORS["peso"],
-            label="m₂g", valor=res.P2,
-            lw=2.0, offset_label=(0.06, -0.10), zorder=10)
 
-    # ── TENSIÓN sobre m2 (↑) ─────────────────────────────────────────────────
+    L_peso2 = lon(res.P2)
+
+    _vector(
+        ax,
+        cx2,
+        b2y,
+        0,
+        -L_peso2,
+        color=COLORS["peso"],
+        label="m₂g",
+        valor=res.P2,
+        lw=2.0,
+        zorder=10
+    )
+
+    # ── TENSIÓN sobre m2 ─────────────────────────────
+    cy2_top = b2y + 0.55
+
     L_t2 = lon(res.tension)
-    _vector(ax,
-            cx2, cy2_top,
-            0, L_t2,
-            color=COLORS["tension"],
-            label="T", valor=res.tension,
-            lw=2.0, offset_label=(0.06, 0.06), zorder=10)
+
+    _vector(
+        ax,
+        cx2,
+        cy2_top,
+        0,
+        L_t2,
+        color=COLORS["tension"],
+        label="T",
+        valor=res.tension,
+        lw=2.0,
+        zorder=10
+    )
 
 
 def _dibujar_desplazamiento(ax, cx1: float, cy1: float, R,
@@ -436,36 +538,50 @@ def _dibujar_desplazamiento(ax, cx1: float, cy1: float, R,
         zorder=13,
     )
 
+def _dibujar_leyenda(ax, tiene_friccion: bool):
 
-def _dibujar_leyenda(ax, tiene_friccion: bool) -> None:
-    """Dibuja la leyenda completa de vectores en la esquina inferior derecha."""
-    entradas = [
-        mpatches.Patch(color=COLORS["peso"],    label="Peso  (m·g)"),
-        mpatches.Patch(color=COLORS["normal"],  label="Normal  (N)"),
-        mpatches.Patch(color=COLORS["tension"], label="Tensión  (T)"),
+    handles = [
+        plt.Line2D([0], [0], color=COLORS["peso"], lw=4, label="Peso"),
+        plt.Line2D([0], [0], color=COLORS["normal"], lw=4, label="Normal"),
+        plt.Line2D([0], [0], color=COLORS["tension"], lw=4, label="Tensión"),
     ]
+
     if tiene_friccion:
-        entradas.append(
-            mpatches.Patch(color=COLORS["friccion"], label="Fricción  (Ff)")
+        handles.append(
+            plt.Line2D(
+                [0], [0],
+                color=COLORS["friccion"],
+                lw=4,
+                label="Fricción"
+            )
         )
-    entradas.append(
-        mpatches.Patch(color=COLORS["desplaz"],
-                       label="Desplazamiento",
-                       linestyle="--")
+
+    handles.append(
+        plt.Line2D(
+            [0], [0],
+            color="white",
+            lw=3,
+            linestyle="--",
+            label="Movimiento"
+        )
     )
 
     leg = ax.legend(
-        handles=entradas,
-        loc="lower left",
-        facecolor="#111827",
+        handles=handles,
+        loc="lower right",
+        fontsize=10,
+        facecolor="#08111f",
         edgecolor="#334155",
-        labelcolor=COLORS["texto"],
-        fontsize=7.8,
-        prop={"family": "monospace"},
-        framealpha=0.92,
-        borderpad=0.7,
+        framealpha=0.95,
+        fancybox=True,
+        borderpad=1,
+        bbox_to_anchor=(0.03, 0.42),
     )
-    leg.set_zorder(20)
+
+    for txt in leg.get_texts():
+        txt.set_color("#e2e8f0")
+
+    leg.set_zorder(100)
 
 
 def _dibujar_panel_estado(ax, estado: str, res: SystemResult) -> None:
@@ -482,14 +598,14 @@ def _dibujar_panel_estado(ax, estado: str, res: SystemResult) -> None:
     }
     texto, color = cfg[estado]
 
-    ax.text(5, 7.55, texto,
-            color=color, fontsize=9.5, ha="center", va="center",
+    ax.text(7.8, 8.45, texto,
+            color=color, fontsize=11, ha="center", va="center",
             fontfamily="monospace", fontweight="bold",
-            bbox=dict(boxstyle="round,pad=0.45",
-                      facecolor="#0d1424",
+            bbox=dict(boxstyle="round,pad=0.6",
+                      facecolor="#08111f",
                       edgecolor=color,
-                      linewidth=1.8,
-                      alpha=0.95),
+                      linewidth=2.2,
+                      alpha=0.96),
             zorder=15)
 
 
@@ -510,11 +626,25 @@ def construir_diagrama(m1: float, m2: float,
     -------
     Figura matplotlib lista para renderizar con st.pyplot().
     """
-    fig, ax = plt.subplots(figsize=(11, 6.5))
+    fig, ax = plt.subplots(
+        figsize=(14, 8),
+        facecolor=COLORS["bg_deep"]
+    )
+
+    ax.grid(
+        color="#1e293b",
+        linestyle="--",
+        linewidth=0.5,
+        alpha=0.15
+    )
+    fig.patch.set_facecolor("#020617")
+    ax.set_facecolor("#020617")
+    plt.rcParams["font.family"] = "DejaVu Sans"
+    plt.rcParams["figure.dpi"] = 150
     fig.patch.set_facecolor(COLORS["bg_deep"])
     ax.set_facecolor(COLORS["bg_deep"])
     ax.set_xlim(0, 10)
-    ax.set_ylim(0, 8.2)
+    ax.set_ylim(0, 9)
     ax.set_aspect("equal")
     ax.axis("off")
 
@@ -522,7 +652,7 @@ def construir_diagrama(m1: float, m2: float,
     base_x  = 0.6
     base_y  = 0.8
     L       = 5.5
-    bl_size = 0.58
+    bl_size = 0.82
     polea_r = 0.33
 
     # ── Construcción del diagrama (orden de capas) ────────────────────────────
@@ -539,8 +669,10 @@ def construir_diagrama(m1: float, m2: float,
     # Vectores de fuerza (proporcionales a magnitud)
     _dibujar_vectores_fuerzas(ax, cx1, cy1, R, bl_size, theta, b2x, b2y, res)
 
+    _dibujar_panel_fuerzas(ax, res)
+
     # Indicadores de dirección de desplazamiento
-    _dibujar_desplazamiento(ax, cx1, cy1, R, bl_size, theta, b2x, b2y, res.estado)
+    #_dibujar_desplazamiento(ax, cx1, cy1, R, bl_size, theta, b2x, b2y, res.estado)
 
     # Panel de estado y aceleración
     _dibujar_panel_estado(ax, res.estado, res)
@@ -550,3 +682,74 @@ def construir_diagrama(m1: float, m2: float,
 
     fig.tight_layout(pad=0.3)
     return fig
+
+def _dibujar_panel_fuerzas(ax, res: SystemResult) -> None:
+
+    panel = mpatches.FancyBboxPatch(
+        (0.25, 6.95),
+        9.4,
+        1.0,
+        boxstyle="round,pad=0.18",
+        facecolor="#08111f",
+        edgecolor="#334155",
+        linewidth=1.8,
+        alpha=0.96,
+        zorder=30,
+    )
+
+    ax.add_patch(panel)
+
+    items = [
+        ("m₁g", res.F_paralela, COLORS["peso"]),
+        ("N", res.F_normal, COLORS["normal"]),
+        ("T", res.tension, COLORS["tension"]),
+    ]
+
+    if res.F_friccion > 0.01:
+        items.append(
+            ("Ff", res.F_friccion, COLORS["friccion"])
+        )
+
+    items.extend([
+        ("m₂g", res.P2, COLORS["peso"])
+    ])
+
+    x = 0.8
+
+    for nombre, valor, color in items:
+
+        # Línea de color
+        ax.plot(
+            [x - 0.08, x + 0.08],
+            [7.55, 7.55],
+            color=color,
+            lw=6,
+            solid_capstyle="round",
+            zorder=35,
+        )
+
+        # Nombre
+        ax.text(
+            x,
+            7.30,
+            nombre,
+            color=color,
+            fontsize=13,
+            fontweight="bold",
+            ha="center",
+            zorder=40,
+        )
+
+        # Valor
+        ax.text(
+            x,
+            7.02,
+            f"{valor:.1f} N",
+            color="#f8fafc",
+            fontsize=11,
+            fontweight="bold",
+            ha="center",
+            zorder=40,
+        )
+
+        x += 1.6

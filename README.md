@@ -41,6 +41,7 @@ simulador/
 pip install -r requirements.txt
 
 # 2. Ejecutar la aplicación
+cd simulador
 python -m streamlit run app.py
 ```
 
