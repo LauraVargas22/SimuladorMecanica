@@ -1,6 +1,7 @@
 # ⚙️ Simulador Mecánico — Polea & Plano Inclinado
 
-Aplicación educativa e interactiva desarrollada con **Streamlit** para simular el comportamiento dinámico de un sistema de dos cuerpos conectados mediante polea ideal y plano inclinado.
+Aplicación educativa e interactiva desarrollada con **Streamlit** para simular el comportamiento dinámico de un sistema de dos cuerpos conectados mediante polea ideal y plano inclinado. A continuación encontrará el proyecto desplegado: 
+https://simuladormecanica-proyectouis.streamlit.app/
 
 ---
 
